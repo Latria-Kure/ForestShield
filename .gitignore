@@ -1,0 +1,14 @@
+**/__pycache__/
+/__pycache__/
+**/*.ipynb
+**/data/
+/data/
+.vscode/
+test/
+*.egg-info/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+build/
