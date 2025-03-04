@@ -1,0 +1,3 @@
+"""
+Forest module initialization.
+"""

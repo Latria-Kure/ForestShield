@@ -190,7 +190,7 @@ def load_data(file_path):
     Load and perform initial data cleaning
     """
     print(f"\nLoading data from {file_path}")
-    data = pd.read_csv(file_path)
+    data = pd.read_csv(file_path, nrows=10000)
 
     # Basic cleaning
     data.replace([np.inf, -np.inf], np.nan, inplace=True)
