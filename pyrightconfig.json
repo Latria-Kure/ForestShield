@@ -1,0 +1,10 @@
+{
+    "reportMissingTypeStubs": true,
+    "reportMissingImports": true,
+    "reportMissingTypeAnnotations": true,
+    "stubPath": "./typings",
+    "pythonPath": "D:\\Miniconda3\\python.exe",
+    "extraPaths": [
+        "forest_shield"
+    ]
+}

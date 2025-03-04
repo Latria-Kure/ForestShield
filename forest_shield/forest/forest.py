@@ -70,14 +70,12 @@ def _parallel_build_trees(
             X,
             y,
             sample_weight=curr_sample_weight,
-            check_input=False,
         )
     else:
         tree._fit(
             X,
             y,
             sample_weight=sample_weight,
-            check_input=False,
         )
 
     return tree
@@ -126,7 +124,7 @@ class RandomForestClassifier:
         self.max_samples = max_samples
 
     def fit(self, X, y, sample_weight=None):
-        self._n_samples, self.n_outputs_ = y.shape
+        self._n_samples = y.shape
         if not self.bootstrap and self.max_samples is not None:
             raise ValueError(
                 "`max_sample` cannot be set if `bootstrap=False`. "

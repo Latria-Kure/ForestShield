@@ -12,3 +12,6 @@ test/
 *.pyw
 *.pyz
 build/
+test/
+typings/
+*.c

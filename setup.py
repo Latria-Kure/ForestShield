@@ -9,7 +9,19 @@ extensions = [
         include_dirs=[np.get_include()],
         language="c",
         extra_compile_args=["-O3"],
-    )
+    ),
+    Extension(
+        "forest_shield.tree._splitter",
+        ["forest_shield/tree/_splitter.pyx"],
+        include_dirs=[np.get_include()],
+        language="c",
+    ),
+    Extension(
+        "forest_shield.tree._tree",
+        ["forest_shield/tree/_tree.pyx"],
+        include_dirs=[np.get_include()],
+        language="c",
+    ),
 ]
 
 setup(
