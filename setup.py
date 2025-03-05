@@ -8,7 +8,6 @@ extensions = [
         ["forest_shield/tree/_criterion.pyx"],
         include_dirs=[np.get_include()],
         language="c",
-        extra_compile_args=["-O3"],
     ),
     Extension(
         "forest_shield.tree._splitter",
@@ -35,7 +34,7 @@ setup(
         "forest_shield.forest",
         "forest_shield.utils",
     ],
-    ext_modules=cythonize(extensions, language_level=3),
+    ext_modules=cythonize(extensions, language_level=3, gdb_debug=True),
     install_requires=[
         "numpy>=1.20.0",
         "joblib>=1.0.0",

@@ -102,7 +102,6 @@ class RandomForestClassifier:
         class_weight: dict = None,
         ccp_alpha: float = 0.0,
         max_samples: int = None,
-        monotonic_cst: List[Tuple[str, float]] = None,
     ):
         self.n_estimators = n_estimators
         self.criterion = criterion
@@ -113,7 +112,6 @@ class RandomForestClassifier:
         self.max_features = max_features
         self.max_leaf_nodes = max_leaf_nodes
         self.min_impurity_decrease = min_impurity_decrease
-        self.monotonic_cst = monotonic_cst
         self.ccp_alpha = ccp_alpha
         self.bootstrap = bootstrap
         self.oob_score = oob_score
@@ -161,7 +159,6 @@ class RandomForestClassifier:
                     min_impurity_decrease=self.min_impurity_decrease,
                     random_state=self.random_state,
                     ccp_alpha=self.ccp_alpha,
-                    monotonic_cst=self.monotonic_cst,
                 )
                 for i in range(self.n_estimators)
             ]
