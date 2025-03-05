@@ -21,6 +21,12 @@ extensions = [
         include_dirs=[np.get_include()],
         language="c",
     ),
+    Extension(
+        "forest_shield.tree._utils",
+        ["forest_shield/tree/_utils.pyx"],
+        include_dirs=[np.get_include()],
+        language="c",
+    ),
 ]
 
 setup(
