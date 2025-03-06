@@ -1,5 +1,15 @@
 from ._utils cimport RAND_R_MAX, rand_int, rand_uniform
 import numpy as np
+
+from ._partitioner cimport (
+    FEATURE_THRESHOLD, DensePartitioner, SparsePartitioner
+)
+
+ctypedef fused Partitioner:
+    DensePartitioner
+    SparsePartitioner
+
+cdef float64_t INFINITY = np.inf
 cdef class Splitter:
     def __cinit__(
         self,
@@ -122,7 +132,16 @@ cdef class Splitter:
         return self.criterion.node_impurity()
 
 cdef class BestSplitter(Splitter):
-    pass
+    cdef DensePartitioner partitioner
+    cdef int init(
+        self,
+        object X,
+        const float64_t[:, ::1] y,
+        const float64_t[:] sample_weight,
+    ) except -1:
+        Splitter.init(self, X, y, sample_weight )
+        self.partitioner = DensePartitioner(X, self.samples, self.feature_values)
+        return 0
 
 
 cdef class BestSparseSplitter(Splitter):
