@@ -55,7 +55,7 @@ class DecisionTreeClassifier:
         self.max_features = max_features
         self.max_leaf_nodes = max_leaf_nodes
         self.min_impurity_decrease = min_impurity_decrease
-        self.random_state = random_state
+        self.random_state = np.random.RandomState(random_state)
         self.class_weight = class_weight
         self.ccp_alpha = ccp_alpha
 
@@ -65,8 +65,6 @@ class DecisionTreeClassifier:
         y,
         sample_weight=None,
     ):
-
-        random_state = np.random.RandomState(self.random_state)
 
         n_samples, self.n_features_in_ = X.shape
         y = np.atleast_1d(y)
@@ -145,7 +143,7 @@ class DecisionTreeClassifier:
                 self.max_features_,
                 min_samples_leaf,
                 min_weight_leaf,
-                random_state,
+                self.random_state,
             )
 
         self.tree_ = Tree(self.n_features_in_, self.n_classes_)

@@ -47,3 +47,18 @@ cdef class Splitter:
         const float64_t[:, ::1] y,
         const float64_t[:] sample_weight
     ) except -1
+
+    cdef int node_reset(
+        self,
+        intp_t start,
+        intp_t end,
+        float64_t* weighted_n_node_samples
+    ) except -1 nogil
+
+    cdef int node_split(
+        self,
+        ParentInfo* parent,
+        SplitRecord* split,
+    ) except -1 nogil
+
+    cdef float64_t node_impurity(self) noexcept nogil

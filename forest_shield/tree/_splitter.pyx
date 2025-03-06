@@ -75,6 +75,52 @@ cdef class Splitter:
         self.sample_weight = sample_weight
         return 0
 
+    cdef int node_reset(
+        self,
+        intp_t start,
+        intp_t end,
+        float64_t* weighted_n_node_samples
+    ) except -1 nogil:
+        """Reset splitter on node samples[start:end].
+
+        Returns -1 in case of failure to allocate memory (and raise MemoryError)
+        or 0 otherwise.
+
+        Parameters
+        ----------
+        start : intp_t
+            The index of the first sample to consider
+        end : intp_t
+            The index of the last sample to consider
+        weighted_n_node_samples : ndarray, dtype=float64_t pointer
+            The total weight of those samples
+        """
+
+        self.start = start
+        self.end = end
+
+        self.criterion.init(
+            self.y,
+            self.sample_weight,
+            self.weighted_n_samples,
+            self.samples,
+            start,
+            end
+        )
+
+        weighted_n_node_samples[0] = self.criterion.weighted_n_node_samples
+        return 0
+
+    cdef int node_split(
+        self,
+        ParentInfo* parent_record,
+        SplitRecord* split,
+    ) except -1 nogil:
+        pass
+
+    cdef float64_t node_impurity(self) noexcept nogil:
+        return self.criterion.node_impurity()
+
 cdef class BestSplitter(Splitter):
     pass
 

@@ -5,7 +5,7 @@ cdef class Criterion:
     
     This class provides a simple method to add two numbers.
     """
-    cdef const float64_t[::1] y         # Values of y (one column vector)
+    cdef const float64_t[:,::1] y         # Values of y (one column vector)
     cdef const float64_t[:] sample_weight  # Sample weights
 
     cdef const intp_t[:] sample_indices    # Sample indices in X, y
@@ -29,18 +29,13 @@ cdef class Criterion:
 
     cdef int init(
         self,
-        const float64_t[::1] y,
+        const float64_t[:,::1] y,
         const float64_t[:] sample_weight,
         float64_t weighted_n_samples,
         const intp_t[:] sample_indices,
         intp_t start,
         intp_t end
     ) except -1 nogil
-
-cdef class Gini(Criterion):
-    pass
-
-cdef class Entropy(Criterion):
-    pass
-
+    cdef int reset(self) except -1 nogil
+    cdef float64_t node_impurity(self) noexcept nogil
 

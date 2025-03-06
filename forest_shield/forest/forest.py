@@ -19,12 +19,13 @@ def _get_n_samples_bootstrap(n_samples, max_samples):
         return max(round(n_samples * max_samples), 1)
 
 
-def _generate_sample_indices(random_state, n_samples, n_samples_bootstrap):
+def _generate_sample_indices(
+    random_state: np.random.RandomState, n_samples, n_samples_bootstrap
+):
     """
     Private function used to _parallel_build_trees function."""
 
-    random_instance = np.random.RandomState(random_state)
-    sample_indices = random_instance.randint(
+    sample_indices = random_state.randint(
         0, n_samples, n_samples_bootstrap, dtype=np.int32
     )
 
@@ -57,6 +58,7 @@ def _parallel_build_trees(
             tree.random_state, n_samples, n_samples_bootstrap
         )
         sample_counts = np.bincount(indices, minlength=n_samples)
+        print(len(sample_counts[sample_counts > 0]))
         curr_sample_weight *= sample_counts
 
         if class_weight == "subsample":
@@ -116,7 +118,8 @@ class RandomForestClassifier:
         self.bootstrap = bootstrap
         self.oob_score = oob_score
         self.n_jobs = n_jobs
-        self.random_state = random_state
+        print(f"random state: {random_state}")
+        self.random_state = np.random.RandomState(random_state)
         self.verbose = verbose
         self.class_weight = class_weight
         self.max_samples = max_samples
@@ -157,7 +160,7 @@ class RandomForestClassifier:
                     max_features=self.max_features,
                     max_leaf_nodes=self.max_leaf_nodes,
                     min_impurity_decrease=self.min_impurity_decrease,
-                    random_state=self.random_state,
+                    random_state=self.random_state.randint(np.iinfo(np.int32).max),
                     ccp_alpha=self.ccp_alpha,
                 )
                 for i in range(self.n_estimators)

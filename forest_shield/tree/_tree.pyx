@@ -8,6 +8,8 @@ from libc.stdlib cimport free
 from libc.string cimport memcpy
 from libc.string cimport memset
 from libc.stdint cimport INTPTR_MAX
+from libcpp.stack cimport stack
+from libc.stdio cimport printf
 from scipy.sparse import issparse
 from scipy.sparse import csr_matrix
 
@@ -16,8 +18,23 @@ from ._utils cimport safe_realloc
 from numpy import float32 as DTYPE
 from numpy import float64 as DOUBLE
 
+cdef float64_t INFINITY = np.inf
+cdef float64_t EPSILON = np.finfo('double').eps
+
+
+TREE_LEAF = -1
+TREE_UNDEFINED = -2
+cdef intp_t _TREE_LEAF = TREE_LEAF
+cdef intp_t _TREE_UNDEFINED = TREE_UNDEFINED
+
 cdef Node dummy
 NODE_DTYPE = np.asarray(<Node[:1]>(&dummy)).dtype
+
+cdef inline void _init_parent_record(ParentInfo* record) noexcept nogil:
+    record.n_constant_features = 0
+    record.impurity = INFINITY
+    record.lower_bound = -INFINITY
+    record.upper_bound = INFINITY
 
 cdef extern from "numpy/arrayobject.h":
     object PyArray_NewFromDescr(PyTypeObject* subtype, cnp.dtype descr,
@@ -116,6 +133,77 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
         cdef float64_t min_impurity_decrease = self.min_impurity_decrease
 
         splitter.init(X, y, sample_weight)
+        cdef intp_t start
+        cdef intp_t end
+        cdef intp_t depth
+        cdef intp_t parent
+        cdef bint is_left
+        cdef intp_t n_node_samples = splitter.n_samples
+        cdef float64_t weighted_n_node_samples
+        cdef SplitRecord split
+        cdef intp_t node_id
+
+        cdef float64_t middle_value
+        cdef float64_t left_child_min
+        cdef float64_t left_child_max
+        cdef float64_t right_child_min
+        cdef float64_t right_child_max
+        cdef bint is_leaf
+        cdef bint first = 1
+        cdef intp_t max_depth_seen = -1
+        cdef int rc = 0
+
+        cdef stack[StackRecord] builder_stack
+        cdef StackRecord stack_record
+
+        cdef ParentInfo parent_record
+        _init_parent_record(&parent_record)
+        with nogil:
+            builder_stack.push({
+                "start": 0,
+                "end": n_node_samples,
+                "depth": 0,
+                "parent": _TREE_UNDEFINED,
+                "is_left": 0,
+                "impurity": INFINITY,
+                "n_constant_features": 0,
+                "lower_bound": -INFINITY,
+                "upper_bound": INFINITY,
+            })
+
+            while not builder_stack.empty():
+                stack_record = builder_stack.top()
+                builder_stack.pop()
+
+                start = stack_record.start
+                end = stack_record.end
+                depth = stack_record.depth
+                parent = stack_record.parent
+                is_left = stack_record.is_left
+                parent_record.impurity = stack_record.impurity
+                parent_record.n_constant_features = stack_record.n_constant_features
+                parent_record.lower_bound = stack_record.lower_bound
+                parent_record.upper_bound = stack_record.upper_bound
+
+                n_node_samples = end - start
+                splitter.node_reset(start, end, &weighted_n_node_samples)
+
+                is_leaf = (depth >= max_depth or
+                           n_node_samples < min_samples_split or
+                           n_node_samples < 2 * min_samples_leaf or
+                           weighted_n_node_samples < 2 * min_weight_leaf)
+
+                if first:
+                    parent_record.impurity = splitter.node_impurity()
+                    first = 0
+
+                is_leaf = is_leaf or parent_record.impurity <= EPSILON
+
+                if not is_leaf:
+                    splitter.node_split(
+                        &parent_record,
+                        &split,
+                    )
 cdef class BestFirstTreeBuilder(TreeBuilder):
     pass
 

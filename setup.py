@@ -19,7 +19,7 @@ extensions = [
         "forest_shield.tree._tree",
         ["forest_shield/tree/_tree.pyx"],
         include_dirs=[np.get_include()],
-        language="c",
+        language="c++",
     ),
     Extension(
         "forest_shield.tree._utils",
