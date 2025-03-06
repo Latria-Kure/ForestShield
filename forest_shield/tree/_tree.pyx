@@ -108,6 +108,14 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
 
         tree._resize(init_capacity)
 
+        cdef Splitter splitter = self.splitter
+        cdef intp_t max_depth = self.max_depth
+        cdef intp_t min_samples_leaf = self.min_samples_leaf
+        cdef float64_t min_weight_leaf = self.min_weight_leaf
+        cdef intp_t min_samples_split = self.min_samples_split
+        cdef float64_t min_impurity_decrease = self.min_impurity_decrease
+
+        splitter.init(X, y, sample_weight)
 cdef class BestFirstTreeBuilder(TreeBuilder):
     pass
 
