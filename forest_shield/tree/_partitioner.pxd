@@ -12,5 +12,25 @@ cdef class DensePartitioner:
     cdef intp_t start
     cdef intp_t end
 
+    # Methods
+    cdef void init_node_split(
+        self,
+        intp_t start,
+        intp_t end
+    ) noexcept nogil
+    cdef void sort_samples_and_feature_values(
+        self, intp_t current_feature
+    ) noexcept nogil
+    cdef inline void next_p(self, intp_t* p_prev, intp_t* p) noexcept nogil
+    cdef void partition_samples_final(
+        self,
+        intp_t best_pos,
+        float64_t best_threshold,
+        intp_t best_feature
+    ) noexcept nogil
+
 cdef class SparsePartitioner:
     pass
+
+
+

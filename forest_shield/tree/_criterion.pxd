@@ -37,5 +37,16 @@ cdef class Criterion:
         intp_t end
     ) except -1 nogil
     cdef int reset(self) except -1 nogil
+    cdef int reverse_reset(self) except -1 nogil
+    cdef float64_t proxy_impurity_improvement(self) noexcept nogil
+    cdef void children_impurity(self, float64_t* impurity_left,
+                                float64_t* impurity_right) noexcept nogil
+    cdef float64_t impurity_improvement(
+        self,
+        float64_t impurity_parent,
+        float64_t impurity_left,
+        float64_t impurity_right
+    ) noexcept nogil
     cdef float64_t node_impurity(self) noexcept nogil
+    cdef int update(self, intp_t new_pos) except -1 nogil
 

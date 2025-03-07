@@ -43,6 +43,64 @@ cdef class Criterion:
     cdef float64_t node_impurity(self) noexcept nogil:
         pass
 
+    cdef void children_impurity(self, float64_t* impurity_left,
+                                float64_t* impurity_right) noexcept nogil:
+        pass
+
+    cdef float64_t proxy_impurity_improvement(self) noexcept nogil:
+        """Compute a proxy of the impurity reduction.
+
+        This method is used to speed up the search for the best split.
+        It is a proxy quantity such that the split that maximizes this value
+        also maximizes the impurity improvement. It neglects all constant terms
+        of the impurity decrease for a given split.
+
+        The absolute impurity improvement is only computed by the
+        impurity_improvement method once the best split has been found.
+        """
+        cdef float64_t impurity_left
+        cdef float64_t impurity_right
+        self.children_impurity(&impurity_left, &impurity_right)
+
+        return (- self.weighted_n_right * impurity_right
+                - self.weighted_n_left * impurity_left)
+                
+    cdef float64_t impurity_improvement(self, float64_t impurity_parent,
+                                        float64_t impurity_left,
+                                        float64_t impurity_right) noexcept nogil:
+        """Compute the improvement in impurity.
+
+        This method computes the improvement in impurity when a split occurs.
+        The weighted impurity improvement equation is the following:
+
+            N_t / N * (impurity - N_t_R / N_t * right_impurity
+                                - N_t_L / N_t * left_impurity)
+
+        where N is the total number of samples, N_t is the number of samples
+        at the current node, N_t_L is the number of samples in the left child,
+        and N_t_R is the number of samples in the right child,
+
+        Parameters
+        ----------
+        impurity_parent : float64_t
+            The initial impurity of the parent node before the split
+
+        impurity_left : float64_t
+            The impurity of the left child
+
+        impurity_right : float64_t
+            The impurity of the right child
+
+        Return
+        ------
+        float64_t : improvement in impurity after the split occurs
+        """
+        return ((self.weighted_n_node_samples / self.weighted_n_samples) *
+                (impurity_parent - (self.weighted_n_right /
+                                    self.weighted_n_node_samples * impurity_right)
+                                 - (self.weighted_n_left /
+                                    self.weighted_n_node_samples * impurity_left)))
+
     def __cinit__(self,intp_t n_classes):
         self.start = 0
         self.pos = 0
@@ -114,6 +172,76 @@ cdef class Criterion:
         )
         return 0
 
+    cdef int reverse_reset(self) except -1 nogil:
+        """Reset the criterion at pos=end.
+
+        Returns -1 in case of failure to allocate memory (and raise MemoryError)
+        or 0 otherwise.
+        """
+        self.pos = self.end
+        _move_sums_classification(
+            self,
+            self.sum_right,
+            self.sum_left,
+            &self.weighted_n_right,
+            &self.weighted_n_left,
+        )
+        return 0
+
+    cdef int update(self, intp_t new_pos) except -1 nogil:
+        # after reset, pos = start
+        cdef intp_t pos = self.pos
+        cdef intp_t end = self.end
+
+        cdef const intp_t[:] sample_indices = self.sample_indices
+        cdef const float64_t[:] sample_weight = self.sample_weight
+
+        cdef intp_t i
+        cdef intp_t p
+        cdef intp_t k
+        cdef intp_t c
+        cdef float64_t w = 1.0
+        # Update statistics up to new_pos
+        #
+        # Given that
+        #   sum_left[x] +  sum_right[x] = sum_total[x]
+        # and that sum_total is known, we are going to update
+        # sum_left from the direction that require the least amount
+        # of computations, i.e. from pos to new_pos or from end to new_po.
+        if (new_pos - pos) <= (end - new_pos):
+            for p in range(pos, new_pos):
+                i = sample_indices[p]
+
+                if sample_weight is not None:
+                    w = sample_weight[i]
+
+                for c in range(self.n_classes):
+                    self.sum_left[c] += w
+
+                self.weighted_n_left += w
+
+        else:
+            self.reverse_reset()
+
+            for p in range(end - 1, new_pos - 1, -1):
+                i = sample_indices[p]
+
+                if sample_weight is not None:
+                    w = sample_weight[i]
+                # After reverse_reset, left = sum_total.
+                # Substract right part will get left.
+                for c in range(self.n_classes):
+                    self.sum_left[c] -= w
+
+                self.weighted_n_left -= w
+
+        self.weighted_n_right = self.weighted_n_node_samples - self.weighted_n_left
+        for c in range(self.n_classes):
+            self.sum_right[c] = self.sum_total[c] - self.sum_left[c]
+
+        self.pos = new_pos
+        return 0
+
 cdef class Gini(Criterion):
     cdef float64_t node_impurity(self) noexcept nogil:
         cdef float64_t gini = 0.0
@@ -128,6 +256,47 @@ cdef class Gini(Criterion):
         gini += 1.0 - sq_count / (self.weighted_n_node_samples * self.weighted_n_node_samples)
 
         return gini
+
+    cdef void children_impurity(self, float64_t* impurity_left,
+                                float64_t* impurity_right) noexcept nogil:
+        """Evaluate the impurity in children nodes.
+
+        i.e. the impurity of the left child (sample_indices[start:pos]) and the
+        impurity the right child (sample_indices[pos:end]) using the Gini index.
+
+        Parameters
+        ----------
+        impurity_left : float64_t pointer
+            The memory address to save the impurity of the left node to
+        impurity_right : float64_t pointer
+            The memory address to save the impurity of the right node to
+        """
+        cdef float64_t gini_left = 0.0
+        cdef float64_t gini_right = 0.0
+        cdef float64_t sq_count_left
+        cdef float64_t sq_count_right
+        cdef float64_t count_c
+        cdef intp_t c
+
+
+        sq_count_left = 0.0
+        sq_count_right = 0.0
+
+        for c in range(self.n_classes):
+            count_c = self.sum_left[c]
+            sq_count_left += count_c * count_c
+
+            count_c = self.sum_right[c]
+            sq_count_right += count_c * count_c
+
+        gini_left += 1.0 - sq_count_left / (self.weighted_n_left *
+                                            self.weighted_n_left)
+
+        gini_right += 1.0 - sq_count_right / (self.weighted_n_right *
+                                                self.weighted_n_right)
+
+        impurity_left[0] = gini_left
+        impurity_right[0] = gini_right
 
 cdef class Entropy(Criterion):
     pass
