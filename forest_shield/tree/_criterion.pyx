@@ -215,8 +215,7 @@ cdef class Criterion:
                 if sample_weight is not None:
                     w = sample_weight[i]
 
-                for c in range(self.n_classes):
-                    self.sum_left[c] += w
+                self.sum_left[<intp_t> self.y[i, 0]] += w
 
                 self.weighted_n_left += w
 
@@ -230,8 +229,7 @@ cdef class Criterion:
                     w = sample_weight[i]
                 # After reverse_reset, left = sum_total.
                 # Substract right part will get left.
-                for c in range(self.n_classes):
-                    self.sum_left[c] -= w
+                self.sum_left[<intp_t> self.y[i, 0]] -= w
 
                 self.weighted_n_left -= w
 
@@ -241,6 +239,15 @@ cdef class Criterion:
 
         self.pos = new_pos
         return 0
+
+    cdef void node_value(
+        self,
+        float64_t* dest
+    ) noexcept nogil:
+        cdef intp_t c
+
+        for c in range(self.n_classes):
+            dest[c] = self.sum_total[c] / self.weighted_n_node_samples
 
 cdef class Gini(Criterion):
     cdef float64_t node_impurity(self) noexcept nogil:

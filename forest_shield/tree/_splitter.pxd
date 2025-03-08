@@ -62,3 +62,4 @@ cdef class Splitter:
     ) except -1 nogil
 
     cdef float64_t node_impurity(self) noexcept nogil
+    cdef void node_value(self, float64_t* dest) noexcept nogil

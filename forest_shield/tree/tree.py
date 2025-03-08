@@ -3,7 +3,7 @@ import numpy as np
 from numbers import Integral, Real
 import copy
 from scipy.sparse import issparse
-
+import time
 from . import _criterion, _splitter, _tree
 from ._criterion import Criterion
 from ._splitter import Splitter
@@ -63,26 +63,30 @@ class DecisionTreeClassifier:
         self,
         X,
         y,
+        classes_,
+        n_classes_,
         sample_weight=None,
     ):
+        self.classes_ = classes_
+        self.n_classes_ = n_classes_
 
         n_samples, self.n_features_in_ = X.shape
-        y = np.atleast_1d(y)
+        # y = np.atleast_1d(y)
         expanded_class_weight = None
 
-        if y.ndim == 1:
-            y = np.reshape(y, (-1, 1))
+        # if y.ndim == 1:
+        #     y = np.reshape(y, (-1, 1))
 
         y = np.copy(y)
 
         if self.class_weight is not None:
             y_original = np.copy(y)
 
-        y_encoded = np.zeros(y.shape, dtype=int)
-        classes, y_encoded = np.unique(y, return_inverse=True)
-        self.classes_ = classes  # class encoding
-        self.n_classes_ = classes.shape[0]  # number of classes
-        y = y_encoded
+        # y_encoded = np.zeros(y.shape, dtype=int)
+        # classes, y_encoded = np.unique(y, return_inverse=True)
+        # self.classes_ = classes  # class encoding
+        # self.n_classes_ = classes.shape[0]  # number of classes
+        # y = y_encoded
 
         if getattr(y, "dtype", None) != DOUBLE or not y.flags.contiguous:
             y = np.ascontiguousarray(y, dtype=DOUBLE)
@@ -114,6 +118,7 @@ class DecisionTreeClassifier:
                 max_features = 0
 
         self.max_features_ = max_features
+        print("max_features = ", max_features)
         max_leaf_nodes = -1 if self.max_leaf_nodes is None else self.max_leaf_nodes
 
         if len(y) != n_samples:

@@ -49,6 +49,10 @@ cdef class Tree:
     cdef int _resize_c(self, intp_t capacity=*) except -1 nogil
     cdef cnp.ndarray _get_value_ndarray(self)
     cdef cnp.ndarray _get_node_ndarray(self)
+    cdef intp_t _add_node(self, intp_t parent, bint is_left, bint is_leaf,
+                          intp_t feature, float64_t threshold, float64_t impurity,
+                          intp_t n_node_samples,
+                          float64_t weighted_n_node_samples) except -1 nogil
 
 cdef class TreeBuilder:
     cdef Splitter splitter

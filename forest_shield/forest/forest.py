@@ -3,6 +3,17 @@ from numbers import Integral, Real
 from forest_shield.tree import DecisionTreeClassifier
 from joblib import Parallel, delayed
 import numpy as np
+import time
+
+from ..tree._tree import DOUBLE, DTYPE
+from sklearn.utils.validation import (
+    _check_feature_names_in,
+    _check_sample_weight,
+    _num_samples,
+    check_is_fitted,
+    validate_data,
+)
+from sklearn.utils.multiclass import check_classification_targets, type_of_target
 
 
 def _get_n_samples_bootstrap(n_samples, max_samples):
@@ -37,6 +48,8 @@ def _parallel_build_trees(
     bootstrap,
     X,
     y,
+    classes_,
+    n_classes_,
     sample_weight,
     tree_idx,
     n_trees,
@@ -58,7 +71,6 @@ def _parallel_build_trees(
             tree.random_state, n_samples, n_samples_bootstrap
         )
         sample_counts = np.bincount(indices, minlength=n_samples)
-        print(len(sample_counts[sample_counts > 0]))
         curr_sample_weight *= sample_counts
 
         if class_weight == "subsample":
@@ -67,16 +79,20 @@ def _parallel_build_trees(
         elif class_weight == "balanced_subsample":
             # curr_sample_weight *= compute_sample_weight("balanced", y, indices=indices)
             pass
-
         tree._fit(
             X,
             y,
+            classes_,
+            n_classes_,
             sample_weight=curr_sample_weight,
         )
+
     else:
         tree._fit(
             X,
             y,
+            classes_,
+            n_classes_,
             sample_weight=sample_weight,
         )
 
@@ -118,14 +134,54 @@ class RandomForestClassifier:
         self.bootstrap = bootstrap
         self.oob_score = oob_score
         self.n_jobs = n_jobs
-        print(f"random state: {random_state}")
         self.random_state = np.random.RandomState(random_state)
         self.verbose = verbose
         self.class_weight = class_weight
         self.max_samples = max_samples
 
+    def _validate_y_class_weight(self, y):
+        check_classification_targets(y)
+
+        y = np.copy(y)
+        expanded_class_weight = None
+        if self.class_weight is not None:
+            y_original = np.copy(y)
+        y_store_unique_indices = np.zeros(y.shape, dtype=int)
+
+        self.classes_, y_store_unique_indices = np.unique(y, return_inverse=True)
+        self.n_classes_ = self.classes_.shape[0]
+        y = y_store_unique_indices
+
+        # TODO: Implement class weight
+        return y, expanded_class_weight
+
     def fit(self, X, y, sample_weight=None):
-        self._n_samples = y.shape
+        X, y = validate_data(
+            self,
+            X,
+            y,
+            multi_output=True,
+            accept_sparse="csc",
+            dtype=DTYPE,
+            ensure_all_finite=False,
+        )
+
+        y = np.atleast_1d(y)
+
+        if y.ndim == 1:
+            # reshape is necessary to preserve the data contiguity against vs
+            # [:, np.newaxis] that does not.
+            y = np.reshape(y, (-1, 1))
+        self._n_samples = y.shape[0]
+
+        y, expanded_class_weight = self._validate_y_class_weight(y)
+        if getattr(y, "dtype", None) != DOUBLE or not y.flags.contiguous:
+            y = np.ascontiguousarray(y, dtype=DOUBLE)
+
+        if expanded_class_weight is not None:
+            # TODO: Implement class weight
+            pass
+
         if not self.bootstrap and self.max_samples is not None:
             raise ValueError(
                 "`max_sample` cannot be set if `bootstrap=False`. "
@@ -176,6 +232,8 @@ class RandomForestClassifier:
                     self.bootstrap,
                     X,
                     y,
+                    self.classes_,
+                    self.n_classes_,
                     sample_weight,
                     i,
                     len(trees),
@@ -194,3 +252,16 @@ class RandomForestClassifier:
             pass
 
         return self
+
+    def predict(self, X):
+        """
+        Predict class for X.
+
+        The predicted class of an input sample is a vote by the trees in the forest,
+        weighted by the sample weight when possible.
+        """
+        proba = self.predict_proba(X)
+        return self.classes_.take(np.argmax(proba, axis=1), axis=0)
+
+    def predict_proba(self, X):
+        pass

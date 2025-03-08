@@ -41,6 +41,10 @@ cdef class Criterion:
     cdef float64_t proxy_impurity_improvement(self) noexcept nogil
     cdef void children_impurity(self, float64_t* impurity_left,
                                 float64_t* impurity_right) noexcept nogil
+    cdef void node_value(
+        self,
+        float64_t* dest
+    ) noexcept nogil
     cdef float64_t impurity_improvement(
         self,
         float64_t impurity_parent,

@@ -142,6 +142,11 @@ cdef class Splitter:
     cdef float64_t node_impurity(self) noexcept nogil:
         return self.criterion.node_impurity()
 
+    cdef void node_value(self, float64_t* dest) noexcept nogil:
+        """Copy the value of node samples[start:end] into dest."""
+
+        self.criterion.node_value(dest)
+
 cdef inline int node_split_best(
     Splitter splitter,
     DensePartitioner partitioner,
@@ -151,7 +156,6 @@ cdef inline int node_split_best(
 ) except -1 nogil:
     cdef intp_t start = splitter.start
     cdef intp_t end = splitter.end
-    cdef intp_t n_searches
     cdef intp_t n_left, n_right
 
     cdef intp_t[::1] samples = splitter.samples
@@ -170,8 +174,6 @@ cdef inline int node_split_best(
     cdef float64_t best_proxy_improvement = -INFINITY
 
     cdef float64_t impurity = parent_record.impurity
-    cdef float64_t lower_bound = parent_record.lower_bound
-    cdef float64_t upper_bound = parent_record.upper_bound
 
     cdef intp_t f_i = n_features
     cdef intp_t f_j
@@ -217,7 +219,7 @@ cdef inline int node_split_best(
         current_split.feature = features[f_j]
         partitioner.sort_samples_and_feature_values(current_split.feature)
 
-        if(feature_values[end - 1] <= feature_values[start] + FEATURE_THRESHOLD):
+        if(end == start or feature_values[end - 1] <= feature_values[start] + FEATURE_THRESHOLD):
             # We consider this feature constant in this case.
             # Since finding a split among constant feature is not valuable,
             # we do not consider this feature for splitting.
@@ -239,11 +241,10 @@ cdef inline int node_split_best(
             partitioner.next_p(&p_prev, &p)
 
             if p >= end:
-                break
+                continue
 
             n_left = p - start
             n_right = end - p
-
             # Reject if min_samples_leaf is not guaranteed
             if n_left < min_samples_leaf or n_right < min_samples_leaf:
                 continue
@@ -317,7 +318,7 @@ cdef class BestSplitter(Splitter):
     ) except -1:
         Splitter.init(self, X, y, sample_weight )
         self.partitioner = DensePartitioner(X, self.samples, self.feature_values)
-        return 0
+
     cdef int node_split(
             self,
             ParentInfo* parent_record,
