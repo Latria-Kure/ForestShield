@@ -53,6 +53,8 @@ cdef class Tree:
                           intp_t feature, float64_t threshold, float64_t impurity,
                           intp_t n_node_samples,
                           float64_t weighted_n_node_samples) except -1 nogil
+    cpdef cnp.ndarray predict(self, object X)
+    cpdef cnp.ndarray apply(self, object X)
 
 cdef class TreeBuilder:
     cdef Splitter splitter

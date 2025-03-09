@@ -424,3 +424,40 @@ cdef class Tree:
 
         return node_id
 
+    cpdef cnp.ndarray predict(self, object X):
+        out = self._get_value_ndarray().take(self.apply(X), axis=0,
+                                             mode='clip')
+        out = out.reshape(X.shape[0], self.n_classes)
+        return out
+
+    cpdef cnp.ndarray apply(self, object X):
+        if not isinstance(X, np.ndarray):
+            raise ValueError("X should be in np.ndarray format, got %s"
+                             % type(X))
+
+        if X.dtype != DTYPE:
+            raise ValueError("X.dtype should be np.float32, got %s" % X.dtype)
+        
+        cdef const float32_t[:, :] X_ndarray = X
+        cdef intp_t n_samples = X.shape[0]
+        cdef float32_t X_i_node_feature
+
+        cdef intp_t[:] out = np.zeros(n_samples, dtype=np.intp)
+
+        cdef Node* node = NULL
+        cdef intp_t i = 0
+
+        with nogil:
+            for i in range(n_samples):
+                node = self.nodes
+                # While node not a leaf
+                while node.left_child != _TREE_LEAF:
+                    X_i_node_feature = X_ndarray[i, node.feature]
+                    if X_i_node_feature <= node.threshold:
+                        node = &self.nodes[node.left_child]
+                    else:
+                        node = &self.nodes[node.right_child]
+
+                out[i] = <intp_t>(node - self.nodes)  # node offset
+
+        return np.asarray(out)

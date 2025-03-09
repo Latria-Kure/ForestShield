@@ -1,9 +1,10 @@
 from typing import List, Tuple
 from numbers import Integral, Real
 from forest_shield.tree import DecisionTreeClassifier
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, effective_n_jobs
 import numpy as np
 import time
+import threading
 
 from ..tree._tree import DOUBLE, DTYPE
 from sklearn.utils.validation import (
@@ -41,6 +42,31 @@ def _generate_sample_indices(
     )
 
     return sample_indices
+
+
+def _partition_estimators(n_estimators, n_jobs):
+    """Private function used to partition estimators between jobs."""
+    # Compute the number of jobs
+    n_jobs = min(effective_n_jobs(n_jobs), n_estimators)
+
+    # Partition estimators between jobs
+    n_estimators_per_job = np.full(n_jobs, n_estimators // n_jobs, dtype=int)
+    n_estimators_per_job[: n_estimators % n_jobs] += 1
+    starts = np.cumsum(n_estimators_per_job)
+
+    return n_jobs, n_estimators_per_job.tolist(), [0] + starts.tolist()
+
+
+def _accumulate_prediction(predict, X, out, lock):
+    """
+    This is a utility function for joblib's Parallel.
+
+    It can't go locally in ForestClassifier or ForestRegressor, because joblib
+    complains that it cannot pickle it when placed there.
+    """
+    prediction = predict(X)
+    with lock:
+        out += prediction
 
 
 def _parallel_build_trees(
@@ -260,8 +286,30 @@ class RandomForestClassifier:
         The predicted class of an input sample is a vote by the trees in the forest,
         weighted by the sample weight when possible.
         """
+        X = validate_data(
+            self,
+            X,
+            dtype=DTYPE,
+            reset=False,
+            ensure_all_finite=False,
+        )
         proba = self.predict_proba(X)
         return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
     def predict_proba(self, X):
-        pass
+        n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
+        all_proba = np.zeros((X.shape[0], self.n_classes_), dtype=np.float64)
+
+        lock = threading.Lock()
+        Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
+            delayed(_accumulate_prediction)(
+                e.predict_proba,
+                X,
+                all_proba,
+                lock,
+            )
+            for e in self.estimators_
+        )
+
+        all_proba /= len(self.estimators_)
+        return all_proba

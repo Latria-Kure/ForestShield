@@ -175,3 +175,7 @@ class DecisionTreeClassifier:
         builder.build(self.tree_, X, y, sample_weight)
 
         return self
+
+    def predict_proba(self, X):
+        proba = self.tree_.predict(X)
+        return proba[:, : self.n_classes_]
