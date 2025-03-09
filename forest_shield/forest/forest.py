@@ -101,8 +101,6 @@ def _parallel_build_trees(
         tree._fit(
             X,
             y,
-            classes_,
-            n_classes_,
             sample_weight=curr_sample_weight,
         )
 
@@ -110,8 +108,6 @@ def _parallel_build_trees(
         tree._fit(
             X,
             y,
-            classes_,
-            n_classes_,
             sample_weight=sample_weight,
         )
 

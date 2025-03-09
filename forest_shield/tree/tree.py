@@ -67,12 +67,9 @@ class DecisionTreeClassifier:
         self,
         X,
         y,
-        classes_,
-        n_classes_,
         sample_weight=None,
     ):
-        self.classes_ = classes_
-        self.n_classes_ = n_classes_
+        self.n_classes_ = len(np.unique(y))
 
         n_samples, self.n_features_in_ = X.shape
         expanded_class_weight = None
