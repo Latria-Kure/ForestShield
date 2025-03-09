@@ -3,18 +3,11 @@ from numbers import Integral, Real
 from forest_shield.tree import DecisionTreeClassifier
 from joblib import Parallel, delayed, effective_n_jobs
 import numpy as np
+import pandas as pd
 import time
 import threading
 
 from ..tree._tree import DOUBLE, DTYPE
-from sklearn.utils.validation import (
-    _check_feature_names_in,
-    _check_sample_weight,
-    _num_samples,
-    check_is_fitted,
-    validate_data,
-)
-from sklearn.utils.multiclass import check_classification_targets, type_of_target
 
 
 def _get_n_samples_bootstrap(n_samples, max_samples):
@@ -166,8 +159,6 @@ class RandomForestClassifier:
         self.max_samples = max_samples
 
     def _validate_y_class_weight(self, y):
-        check_classification_targets(y)
-
         y = np.copy(y)
         expanded_class_weight = None
         if self.class_weight is not None:
@@ -181,16 +172,9 @@ class RandomForestClassifier:
         # TODO: Implement class weight
         return y, expanded_class_weight
 
-    def fit(self, X, y, sample_weight=None):
-        X, y = validate_data(
-            self,
-            X,
-            y,
-            multi_output=True,
-            accept_sparse="csc",
-            dtype=DTYPE,
-            ensure_all_finite=False,
-        )
+    def fit(self, X: pd.DataFrame, y: pd.Series, sample_weight=None):
+        X = X.values.astype(DTYPE)
+        y = y.values
 
         y = np.atleast_1d(y)
 
@@ -279,20 +263,14 @@ class RandomForestClassifier:
 
         return self
 
-    def predict(self, X):
+    def predict(self, X: pd.DataFrame):
         """
         Predict class for X.
 
         The predicted class of an input sample is a vote by the trees in the forest,
         weighted by the sample weight when possible.
         """
-        X = validate_data(
-            self,
-            X,
-            dtype=DTYPE,
-            reset=False,
-            ensure_all_finite=False,
-        )
+        X = X.values.astype(DTYPE)
         proba = self.predict_proba(X)
         return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
