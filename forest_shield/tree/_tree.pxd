@@ -55,6 +55,7 @@ cdef class Tree:
                           float64_t weighted_n_node_samples) except -1 nogil
     cpdef cnp.ndarray predict(self, object X)
     cpdef cnp.ndarray apply(self, object X)
+    cpdef compute_feature_importances(self, normalize=*)
 
 cdef class TreeBuilder:
     cdef Splitter splitter

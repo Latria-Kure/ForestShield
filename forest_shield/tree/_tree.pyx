@@ -461,3 +461,41 @@ cdef class Tree:
                 out[i] = <intp_t>(node - self.nodes)  # node offset
 
         return np.asarray(out)
+
+    cpdef compute_feature_importances(self, normalize=True):
+        """Computes the importance of each feature (aka variable)."""
+        cdef Node* left
+        cdef Node* right
+        cdef Node* nodes = self.nodes
+        cdef Node* node = nodes
+        cdef Node* end_node = node + self.node_count
+
+        cdef float64_t normalizer = 0.
+
+        cdef cnp.float64_t[:] importances = np.zeros(self.n_features)
+
+        with nogil:
+            while node != end_node:
+                if node.left_child != _TREE_LEAF:
+                    # ... and node.right_child != _TREE_LEAF:
+                    left = &nodes[node.left_child]
+                    right = &nodes[node.right_child]
+
+                    importances[node.feature] += (
+                        node.weighted_n_node_samples * node.impurity -
+                        left.weighted_n_node_samples * left.impurity -
+                        right.weighted_n_node_samples * right.impurity)
+                node += 1
+
+        for i in range(self.n_features):
+            importances[i] /= nodes[0].weighted_n_node_samples
+
+        if normalize:
+            normalizer = np.sum(importances)
+
+            if normalizer > 0.0:
+                # Avoid dividing by zero (e.g., when root is pure)
+                for i in range(self.n_features):
+                    importances[i] /= normalizer
+
+        return np.asarray(importances)

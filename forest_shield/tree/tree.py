@@ -59,6 +59,10 @@ class DecisionTreeClassifier:
         self.class_weight = class_weight
         self.ccp_alpha = ccp_alpha
 
+    @property
+    def feature_importances_(self):
+        return self.tree_.compute_feature_importances()
+
     def _fit(
         self,
         X,

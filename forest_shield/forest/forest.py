@@ -158,6 +158,20 @@ class RandomForestClassifier:
         self.class_weight = class_weight
         self.max_samples = max_samples
 
+    @property
+    def feature_importances_(self):
+        all_importances = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+            delayed(getattr)(tree, "feature_importances_")
+            for tree in self.estimators_
+            if tree.tree_.node_count > 1
+        )
+
+        if not all_importances:
+            return np.zeros(self.n_features_in_, dtype=np.float64)
+
+        all_importances = np.mean(all_importances, axis=0, dtype=np.float64)
+        return all_importances / np.sum(all_importances)
+
     def _validate_y_class_weight(self, y):
         y = np.copy(y)
         expanded_class_weight = None
