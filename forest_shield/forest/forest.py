@@ -183,6 +183,7 @@ class RandomForestClassifier:
         return y, expanded_class_weight
 
     def fit(self, X: pd.DataFrame, y: pd.Series, sample_weight=None):
+        self.feature_names_ = X.columns
         X = X.values.astype(DTYPE)
         y = y.values
 

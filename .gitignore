@@ -19,3 +19,4 @@ cython_debug/
 **/*.cpp
 ddos_detection/tools/**
 pyrightconfig.json
+model/

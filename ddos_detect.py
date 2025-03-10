@@ -39,6 +39,14 @@ def load_data(file_path):
     return data
 
 
+def get_selected_features(model: RandomForestClassifier, threshold: float = 0.01):
+    importances = model.feature_importances_
+    selected_indices = [
+        i for i, importance in enumerate(importances) if importance >= threshold
+    ]
+    return [model.feature_names_[i] for i in selected_indices]
+
+
 def capture(capture_file_num: int):
     pcap_file = pcap_file_template.format(capture_file_num)
     capture_cmd = capture_cmd_template.format(pcap_file)
@@ -66,6 +74,9 @@ def dos_detect(classifier: RandomForestClassifier, period: int = 3):
         period: Number of seconds to capture and analyze data
     """
     # check if capture dir exists
+    selected_features = get_selected_features(classifier)
+    print(f"Selected features: {selected_features}")
+
     if not os.path.exists("capture"):
         os.makedirs("capture")
 
@@ -97,6 +108,7 @@ def dos_detect(classifier: RandomForestClassifier, period: int = 3):
 
         if analyze_finished and capture_finished:
             data = load_data(out_csv_template.format(analyze_file_num))
+            data = data[selected_features]
             label = classifier.predict(data)
             for i in range(len(label)):
                 result[label[i]] += 1

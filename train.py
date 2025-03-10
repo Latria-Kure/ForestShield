@@ -1,20 +1,7 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import joblib
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import (
-    StandardScaler,
-    OneHotEncoder,
-    LabelEncoder,
-    RobustScaler,
-)
-from sklearn.impute import SimpleImputer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectFromModel, VarianceThreshold
-from sklearn.model_selection import RandomizedSearchCV
+import pickle
+from forest_shield.forest import RandomForestClassifier
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -22,8 +9,6 @@ from sklearn.metrics import (
     fbeta_score,
     precision_score,
     recall_score,
-    roc_auc_score,
-    make_scorer,
 )
 
 # Group features by their characteristics
@@ -161,8 +146,8 @@ def analyze_features(data):
 
     # Check for constant or near-constant features
     variance = data.var()
-    near_constant = variance[variance < 0.01].index.tolist()
-    print(f"\nNear-constant features (variance < 0.01): {near_constant}")
+    low_variance = variance[variance < 0.01].index.tolist()
+    print(f"\nLow variance features (variance < 0.01): {low_variance}")
 
     # Check for highly correlated features
     corr_matrix = data.corr()
@@ -182,7 +167,7 @@ def analyze_features(data):
     for feat1, feat2, corr in high_corr_pairs:
         print(f"{feat1} - {feat2}: {corr:.3f}")
 
-    return near_constant, high_corr_pairs
+    return low_variance, high_corr_pairs
 
 
 def load_data(file_path):
@@ -190,7 +175,7 @@ def load_data(file_path):
     Load and perform initial data cleaning
     """
     print(f"\nLoading data from {file_path}")
-    data = pd.read_csv(file_path, nrows=10000)
+    data = pd.read_csv(file_path)
 
     # Basic cleaning
     data.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -221,10 +206,6 @@ def create_timing_features(X):
     # IAT (Inter-Arrival Time) statistics
     if all(feat in X.columns for feat in ["Fwd IAT Mean", "Bwd IAT Mean"]):
         X["IAT_ratio"] = X["Fwd IAT Mean"] / X["Bwd IAT Mean"].replace(0, 0.1)
-
-    # Flow rate features
-    if all(feat in X.columns for feat in ["Flow Bytes/s", "Flow Packets/s"]):
-        X["Bytes_per_Packet"] = X["Flow Bytes/s"] / X["Flow Packets/s"].replace(0, 0.1)
 
     return X
 
@@ -294,160 +275,38 @@ def feature_engineering(X):
     return X
 
 
-def select_features(X, y, feature_names):
+def select_features(X, y, threshold=0.01):
     """
     Perform feature selection using multiple methods
     """
-    # 1. Remove low variance features
-    selector1 = VarianceThreshold(threshold=0.01)
-    X_var = selector1.fit_transform(X)
-    selected_mask = selector1.get_support()
+    RF = RandomForestClassifier(
+        n_estimators=100, max_depth=20, random_state=42, n_jobs=-1
+    )
+    RF.fit(X, y)
+    importances = RF.feature_importances_
+    indices = np.argsort(importances)[::-1]
 
-    # Get selected feature names
-    selected_features = [
-        f for f, selected in zip(feature_names, selected_mask) if selected
+    # Option 1: Select features based on importance threshold
+    selected_indices = [
+        i for i, importance in enumerate(importances) if importance >= threshold
     ]
-    print(
-        f"\nFeatures removed by variance threshold: {len(feature_names) - len(selected_features)}"
-    )
+    selected_features = [RF.feature_names_[i] for i in selected_indices]
 
-    # 2. Use Random Forest for feature importance
-    rf_selector = SelectFromModel(
-        RandomForestClassifier(n_estimators=50, random_state=42), prefit=False
-    )
-    rf_selector.fit(X_var, y)
+    # Option 2 (alternative): Select top N features
+    # If you want to select a specific number of top features instead, uncomment this:
+    # num_features = int(len(feature_names) * threshold) if threshold < 1 else int(threshold)
+    # selected_features = [feature_names[i] for i in indices[:num_features]]
 
-    # Get final selected features
-    final_mask = rf_selector.get_support()
-    final_features = [
-        f for f, selected in zip(selected_features, final_mask) if selected
-    ]
-
-    print("\nFinal selected features:")
-    for f in final_features:
-        print(f"- {f}")
-
-    return rf_selector, final_features
+    return selected_features, importances
 
 
-def train_model(X_train, y_train, preprocessor):
-    """
-    Train a baseline Random Forest model
-    """
-    pipeline = Pipeline(
-        [
-            ("preprocessor", preprocessor),
-            (
-                "classifier",
-                RandomForestClassifier(
-                    n_estimators=100, max_depth=20, random_state=42, n_jobs=-1
-                ),
-            ),
-        ]
-    )
-
-    pipeline.fit(X_train, y_train)
-    return pipeline
-
-
-def evaluate_model(model, X_test, y_test, label_encoder):
+def evaluate_model(model, X_test, y_test):
     """
     Evaluate the model with metrics prioritizing recall for DoS detection
     """
-    # Make predictions
     y_pred = model.predict(X_test)
-
-    # Get the original class names
-    class_names = label_encoder.classes_
-
-    # Classification metrics
-    print("Classification Report:")
-    print(classification_report(y_test, y_pred, target_names=class_names))
-
-    print("\nConfusion Matrix:")
-    conf_matrix = confusion_matrix(y_test, y_pred)
-    print(conf_matrix)
-
-    # Visualize confusion matrix
-    plt.figure(figsize=(10, 8))
-    plt.imshow(conf_matrix, interpolation="nearest", cmap=plt.cm.Blues)
-    plt.title("Confusion Matrix")
-    plt.colorbar()
-    tick_marks = np.arange(len(class_names))
-    plt.xticks(tick_marks, class_names, rotation=45)
-    plt.yticks(tick_marks, class_names)
-
-    # Add text annotations to the confusion matrix
-    thresh = conf_matrix.max() / 2
-    for i in range(conf_matrix.shape[0]):
-        for j in range(conf_matrix.shape[1]):
-            plt.text(
-                j,
-                i,
-                format(conf_matrix[i, j], "d"),
-                ha="center",
-                va="center",
-                color="white" if conf_matrix[i, j] > thresh else "black",
-            )
-
-    plt.tight_layout()
-    plt.ylabel("True label")
-    plt.xlabel("Predicted label")
-    plt.savefig("confusion_matrix.png")
-
-    # Key metrics for DoS detection (multi-class)
-    recall = recall_score(y_test, y_pred, average="macro")
-    precision = precision_score(y_test, y_pred, average="macro")
-    f1 = f1_score(y_test, y_pred, average="macro")
-    f2 = fbeta_score(y_test, y_pred, beta=2, average="macro")
-
-    print(f"\nKey Metrics (Macro-averaged):")
-    print(f"Recall (sensitivity): {recall:.4f}")
-    print(f"Precision: {precision:.4f}")
-    print(f"F1 Score: {f1:.4f}")
-    print(f"F2 Score (emphasizes recall): {f2:.4f}")
-
-    # Return metrics for potential further analysis
-    return {"recall": recall, "precision": precision, "f1": f1, "f2": f2}
-
-
-def plot_feature_importance(model, X_train, top_n=20):
-    """
-    Fixed feature importance function that works directly with the trained model
-    """
-    # Get feature importances from the classifier
-    rf_model = model.named_steps["classifier"]
-    feature_importances = rf_model.feature_importances_
-
-    # Create a simpler list of feature names - fixes the error in previous code
-    # Instead of trying to recover exact transformed feature names,
-    # we'll create generic feature names based on the originals
-    feature_names = X_train.columns.tolist()
-
-    # Sort features by importance
-    indices = np.argsort(feature_importances)[::-1]
-
-    # Plot top_n most important features
-    plt.figure(figsize=(12, 8))
-    n_features = min(top_n, len(feature_importances))
-
-    # Create the plot
-    plt.title("Feature Importances for DoS Detection")
-    plt.bar(
-        range(n_features), feature_importances[indices[:n_features]], align="center"
-    )
-    plt.xticks(
-        range(n_features), [feature_names[i] for i in indices[:n_features]], rotation=90
-    )
-    plt.tight_layout()
-    plt.savefig("feature_importance.png")
-
-    # Print the top features
-    print("\nTop Features by Importance:")
-    for i in range(n_features):
-        print(
-            f"{i+1}. {feature_names[indices[i]]}: {feature_importances[indices[i]]:.4f}"
-        )
+    print(classification_report(y_test, y_pred))
+    print(confusion_matrix(y_test, y_pred))
 
 
 # Main execution flow
@@ -462,31 +321,43 @@ if __name__ == "__main__":
     X_test = test.drop("Label", axis=1)
     y_test = test["Label"]
 
-    # Analyze features
-    print("\nAnalyzing features...")
-    near_constant, high_corr = analyze_features(X_train)
-
     # Feature engineering
     print("\nPerforming feature engineering...")
     X_train = feature_engineering(X_train)
     X_test = feature_engineering(X_test)
 
+    # Analyze features
+    print("\nAnalyzing features...")
+    low_variance, high_corr = analyze_features(X_train)
+    # remove near constant features
+    print(f"Low variance features to drop: {low_variance}")
+    X_train = X_train.drop(low_variance, axis=1)
+    X_test = X_test.drop(low_variance, axis=1)
+    # remove highly correlated features
+    high_corr_feat_to_drop = []
+    for feat1, feat2, corr in high_corr:
+        if corr > 0.95:
+            if feat1 not in high_corr_feat_to_drop and feat1 not in low_variance:
+                high_corr_feat_to_drop.append(feat1)
+
+    print(f"Highly correlated features to drop: {high_corr_feat_to_drop}")
+    X_train = X_train.drop(high_corr_feat_to_drop, axis=1)
+    X_test = X_test.drop(high_corr_feat_to_drop, axis=1)
+
     # Feature selection
     print("\nPerforming feature selection...")
-    selector, selected_features = select_features(X_train, y_train, X_train.columns)
+    selected_features, importances = select_features(
+        X_train, y_train, X_train.columns, threshold=0.01
+    )
+    print(f"Selected features: {selected_features}")
+    print(f"Importances: {importances}")
 
     # Train model
-    print("\nTraining baseline model...")
-    model = train_model(X_train, y_train, preprocessor)
+    print("\nTraining model...")
+    model = RandomForestClassifier(
+        n_estimators=100, max_depth=20, random_state=42, n_jobs=-1
+    )
+    model.fit(X_train[selected_features], y_train)
+    evaluate_model(model, X_test[selected_features], y_test)
 
-    # Evaluate model
-    print("\nEvaluating model...")
-    metrics = evaluate_model(model, X_test, y_test, label_encoder)
-
-    # Plot feature importance
-    plot_feature_importance(model, X_train)
-
-    # Save artifacts
-    joblib.dump(model, "dos_detection_model.pkl")
-    joblib.dump(label_encoder, "label_encoder.pkl")
-    print("\nModel and label encoder saved successfully")
+    pickle.dump(model, open("model/rf.pkl", "wb"))
