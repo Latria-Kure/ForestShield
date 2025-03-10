@@ -330,49 +330,6 @@ def select_features(X, y, feature_names):
     return rf_selector, final_features
 
 
-def preprocess_data(data):
-    """
-    Preprocess the data with enhanced feature handling
-    """
-    # Encode labels
-    le = LabelEncoder()
-    y = le.fit_transform(data["Label"])
-
-    # Store class mapping
-    class_mapping = dict(zip(le.classes_, range(len(le.classes_))))
-    print(f"\nClass Mapping: {class_mapping}")
-
-    # Separate features
-    X = data.drop(["Label"], axis=1)
-    feature_names = X.columns.tolist()
-
-    # Identify numeric and categorical columns
-    num_cols = X.select_dtypes(include=["float64", "int64"]).columns.tolist()
-    cat_cols = X.select_dtypes(include=["object"]).columns.tolist()
-
-    # Create preprocessing pipelines
-    num_pipeline = Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", RobustScaler()),  # RobustScaler handles outliers better
-        ]
-    )
-
-    cat_pipeline = Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore")),
-        ]
-    )
-
-    # Combine preprocessing steps
-    preprocessor = ColumnTransformer(
-        transformers=[("num", num_pipeline, num_cols), ("cat", cat_pipeline, cat_cols)]
-    )
-
-    return X, y, preprocessor, le, feature_names
-
-
 def train_model(X_train, y_train, preprocessor):
     """
     Train a baseline Random Forest model
@@ -497,19 +454,17 @@ def plot_feature_importance(model, X_train, top_n=20):
 if __name__ == "__main__":
     # Load and analyze data
     print("Loading and analyzing training data...")
-    train = load_data("data/train/train_capture_hulk.csv")
+    train = load_data("data/train/train.csv")
     test = load_data("data/test/test.csv")
+
+    X_train = train.drop("Label", axis=1)
+    y_train = train["Label"]
+    X_test = test.drop("Label", axis=1)
+    y_test = test["Label"]
 
     # Analyze features
     print("\nAnalyzing features...")
-    near_constant, high_corr = analyze_features(train.drop("Label", axis=1))
-
-    # Preprocess data
-    print("\nPreprocessing data...")
-    X_train, y_train, preprocessor, label_encoder, feature_names = preprocess_data(
-        train
-    )
-    X_test, y_test, _, _, _ = preprocess_data(test)
+    near_constant, high_corr = analyze_features(X_train)
 
     # Feature engineering
     print("\nPerforming feature engineering...")

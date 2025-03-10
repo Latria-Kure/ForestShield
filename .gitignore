@@ -17,3 +17,5 @@ typings/
 cython_debug/
 **/*.c
 **/*.cpp
+ddos_detection/tools/**
+pyrightconfig.json
