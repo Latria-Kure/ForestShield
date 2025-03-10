@@ -39,12 +39,8 @@ def load_data(file_path):
     return data
 
 
-def get_selected_features(model: RandomForestClassifier, threshold: float = 0.01):
-    importances = model.feature_importances_
-    selected_indices = [
-        i for i, importance in enumerate(importances) if importance >= threshold
-    ]
-    return [model.feature_names_[i] for i in selected_indices]
+def get_selected_features(model: RandomForestClassifier):
+    return model.feature_names_
 
 
 def capture(capture_file_num: int):
@@ -63,6 +59,82 @@ def analyze(capture_file_num: int):
     analyze_cmd = analyze_cmd_template.format(pcap_file)
     analyze_process = subprocess.Popen(analyze_cmd, shell=True)
     return analyze_process
+
+
+def create_timing_features(X):
+    """
+    Create timing-based features that might be useful for DoS detection
+    """
+    # IAT (Inter-Arrival Time) statistics
+    if all(feat in X.columns for feat in ["Fwd IAT Mean", "Bwd IAT Mean"]):
+        X["IAT_ratio"] = X["Fwd IAT Mean"] / X["Bwd IAT Mean"].replace(0, 0.1)
+
+    return X
+
+
+def create_packet_features(X):
+    """
+    Create packet-based features
+    """
+    # Packet length ratios
+    if all(
+        feat in X.columns
+        for feat in ["Fwd Packet Length Mean", "Bwd Packet Length Mean"]
+    ):
+        X["Packet_Length_Ratio"] = X["Fwd Packet Length Mean"] / X[
+            "Bwd Packet Length Mean"
+        ].replace(0, 0.1)
+
+    # Packet size variations
+    if "Packet Length Std" in X.columns and "Packet Length Mean" in X.columns:
+        X["Packet_Size_CV"] = X["Packet Length Std"] / X["Packet Length Mean"].replace(
+            0, 0.1
+        )
+
+    return X
+
+
+def create_flag_features(X):
+    """
+    Create features based on TCP flags
+    """
+    flag_cols = [col for col in X.columns if "Flag" in col]
+    if len(flag_cols) > 1:
+        # Total flags
+        X["Total_Flags"] = X[flag_cols].sum(axis=1)
+
+        # Flag diversity (number of different flags used)
+        X["Flag_Diversity"] = (X[flag_cols] > 0).sum(axis=1)
+
+        # Ratio of control flags (SYN, FIN, RST) to total flags
+        control_flags = ["SYN Flag Count", "FIN Flag Count", "RST Flag Count"]
+        if all(flag in X.columns for flag in control_flags):
+            X["Control_Flag_Ratio"] = X[control_flags].sum(axis=1) / X[
+                "Total_Flags"
+            ].replace(0, 1)
+
+    return X
+
+
+def feature_engineering(X):
+    """
+    Comprehensive feature engineering combining multiple aspects
+    """
+    X = X.copy()
+
+    # Convert string features to numeric
+    for col in X.select_dtypes(include=["object"]).columns:
+        X[col] = pd.to_numeric(X[col], errors="coerce")
+
+    # Create features from different aspects
+    X = create_timing_features(X)
+    X = create_packet_features(X)
+    X = create_flag_features(X)
+
+    # Fill any NaN values created during feature engineering
+    X.fillna(0, inplace=True)
+
+    return X
 
 
 def dos_detect(classifier: RandomForestClassifier, period: int = 3):
@@ -108,6 +180,7 @@ def dos_detect(classifier: RandomForestClassifier, period: int = 3):
 
         if analyze_finished and capture_finished:
             data = load_data(out_csv_template.format(analyze_file_num))
+            data = feature_engineering(data)
             data = data[selected_features]
             label = classifier.predict(data)
             for i in range(len(label)):

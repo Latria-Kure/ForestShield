@@ -346,9 +346,7 @@ if __name__ == "__main__":
 
     # Feature selection
     print("\nPerforming feature selection...")
-    selected_features, importances = select_features(
-        X_train, y_train, X_train.columns, threshold=0.01
-    )
+    selected_features, importances = select_features(X_train, y_train, threshold=0.01)
     print(f"Selected features: {selected_features}")
     print(f"Importances: {importances}")
 
