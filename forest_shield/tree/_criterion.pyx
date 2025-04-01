@@ -258,7 +258,7 @@ cdef class Gini(Criterion):
 
         for c in range(self.n_classes):
             count = self.sum_total[c]
-            sq_count = count * count
+            sq_count += count * count
 
         gini += 1.0 - sq_count / (self.weighted_n_node_samples * self.weighted_n_node_samples)
 
